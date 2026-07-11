@@ -1,0 +1,10 @@
+# Core deep-learning stack for the "All About Neural Networks" curriculum.
+# For GPU acceleration, install the CUDA build of torch/torchvision from
+# https://pytorch.org/get-started/locally/ instead of the versions pinned here.
+torch>=2.4
+torchvision>=0.19
+numpy>=1.26
+matplotlib>=3.8
+tiktoken>=0.7
+jupyter>=1.0
+nbconvert>=7.0
