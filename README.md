@@ -257,8 +257,9 @@ No production deployment, external users, or business metrics are claimed — th
 
 ## Roadmap / Future Work
 
+- **Classical ML from scratch** — a foundations tier covering linear/logistic regression, PCA, k-means, k-NN, decision trees, bias-variance, and cross-validation, to ground the deep-learning material.
 - Scale the from-scratch GPT with BPE tokens (Tier 2's tokenizer) and a longer context, and reproduce a slice of the GPT-2 loss curve end-to-end.
-- Additional reproductions (e.g. a mixture-of-experts layer, RLHF at slightly larger scale, a cosine-schedule diffusion sampler / DDIM).
+- Additional reproductions and modern architectures (state-space models / Mamba, a DDIM sampler).
 - Convert the shared from-scratch engine into an importable `mininn` package so later notebooks import it rather than restating it.
 - Add CI to execute all notebooks on push as a regression guard.
 
