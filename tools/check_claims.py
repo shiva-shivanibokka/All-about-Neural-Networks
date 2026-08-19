@@ -101,9 +101,15 @@ CLAIMS = [
           output=["epoch 7  test acc 0.9625"],
           prose=[("31_reproduce_vision_transformer", "~96% on MNIST after 8 epochs")]),
 
-    Claim("REINFORCE approaches the 200-step cap; actor-critic does not",
-          output=["REINFORCE: final-100 avg length 184", "actor-critic: final-100 avg length 83"],
-          prose=[("36_policy_gradients_actor_critic", "actor-critic settles well below it")]),
+    Claim("NB36 prints the REINFORCE/actor-critic comparison instead of asserting an ordering in prose",
+          # Both figures move whenever anything upstream touches the RNG stream -- raising the
+          # variance-estimate sample count once flipped actor-critic from 83 to 164. The fix was to
+          # take the numbers out of the narrative entirely, so this claim guards that they stay out.
+          output=["REINFORCE: final-100 avg length", "(REINFORCE reached"],
+          prose=[("36_policy_gradients_actor_critic", "Compare the two printed final-100 averages")]),
+
+    Claim("NB36 claims no ordering for the baseline step, because the data does not support one",
+          output=["that step is large and holds on every run", "claims no ordering for that step"]),
 
     Claim("NB07's reference to NB06's MLP matches what NB06 actually scores",
           output=["final: train acc 1.000, val acc 0.925"],
@@ -150,9 +156,15 @@ def main():
     all_out, markdown, readme, n_assert, problems = load()
     failures = list(problems)
 
-    # the README states this number outright, so it has to match reality
-    if f"{n_assert} asserts" not in readme:
-        failures.append(f"README does not state the real assert count ({n_assert})")
+    # The README quotes the assert count in more than one phrasing ("113 asserts",
+    # "113 of them"). Checking only the first phrasing let a stale second one through
+    # once already, so match every construction that states a count.
+    stated = {int(m) for pat in (r'(\d+)\s+asserts?', r'asserts?[^.]{0,40}?(\d+)\s+of them')
+              for m in re.findall(pat, readme)}
+    if not stated:
+        failures.append("README no longer states an assert count at all")
+    for n in sorted(stated - {n_assert}):
+        failures.append(f"README says {n} asserts somewhere; the notebooks contain {n_assert}")
 
     for c in CLAIMS:
         for s in c.output:
