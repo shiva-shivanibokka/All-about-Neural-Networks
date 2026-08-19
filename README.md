@@ -14,7 +14,7 @@
 
 - **What it is:** a from-scratch deep-learning curriculum — 47 executable Jupyter notebooks across a math-prerequisites tier + 9 tiers — that rebuilds every core component of modern ML (reverse-mode autograd, CNNs, RNN/LSTMs, transformers/GPT, LLM fine-tuning & RLHF, VAEs/GANs/diffusion, reinforcement learning, MoE, quantization, CLIP, RAG/agents) in pure NumPy or bare PyTorch, then **verifies each implementation against PyTorch's reference** — culminating in an end-to-end **mini-ChatGPT** (pretrain → SFT → DPO → serve).
 - **Hardest problem solved:** implementing the full transformer/LLM stack from scratch — reverse-mode autograd, scaled-dot-product & multi-head attention, a trainable GPT, BPE tokenization, KV-cache inference, FlashAttention's tiled/online-softmax algorithm, LoRA, and the RLHF/RL stack (MDPs → Q-learning → policy gradients → PPO → reward model + DPO) — with hand-written backward passes matching PyTorch to machine precision (~1e-14).
-- **Grounding:** every notebook runs end-to-end with built-in `assert`-based correctness checks; the from-scratch GPT trains on tiny-Shakespeare to **1.56 nats/char** (vs. 4.17 random baseline), six landmark papers are reproduced with matching results, and RL agents solve a from-scratch CartPole.
+- **Grounding:** every notebook runs end-to-end and carries inline `assert`-based correctness checks — **109 asserts across all 48 notebooks**, so a regression fails the notebook rather than quietly printing a wrong number. The from-scratch GPT trains on tiny-Shakespeare to **1.56 nats/char** (vs. 4.17 random baseline), six landmark papers are reproduced with matching results, and the RL stack learns a from-scratch CartPole and a gridworld from nothing but self-built environments.
 
 ---
 
@@ -89,7 +89,7 @@ A **Math Foundations** prerequisites tier plus **nine tiers**, each building on 
 | 15 | Mixed precision & numerics | fp32/fp16/bf16, gradient underflow, loss scaling, fp32 master weights — why bf16 won |
 | 16 | FlashAttention from scratch | Online (streaming) softmax + tiling → exact attention in O(n) memory, verified identical to standard attention |
 | 17 | Parallelism | Data / tensor / pipeline / FSDP — each simulated and shown to reassemble exactly; the pipeline bubble |
-| 18 | Scaling laws | A trained power-law sweep reproducing Kaplan/Chinchilla behavior; the compute-optimal argument |
+| 18 | Scaling laws | A trained power-law sweep fitting the Kaplan form `L = L∞ + A·N^-α` (L∞ ≈ 1.47, α ≈ 0.27); the compute-optimal argument |
 
 ### Tier 4 · LLM Pipeline
 | # | Notebook | Focus |
@@ -114,7 +114,7 @@ A repeatable reproduction workflow applied to six landmark results:
 |---|----------|------------------|--------|
 | 27 | Reproduction workflow + **Grokking** | Power et al. 2022 | Sudden generalization ~29× *after* memorization; weight-decay ablation confirms the mechanism |
 | 28 | **Deep Double Descent** | Nakkiran et al. 2019 | Test-error peak exactly at the interpolation threshold, second descent beyond it |
-| 29 | **Lottery Ticket Hypothesis** | Frankle & Carbin 2018 | Winning ticket at ~3% of weights; random-reinit control collapses |
+| 29 | **Lottery Ticket Hypothesis** | Frankle & Carbin 2018 | Ticket holds dense accuracy at ~3% of weights; the control degrades but mostly by *variance* — a partial reproduction, reported as such |
 | 30 | **Knowledge Distillation** | Hinton et al. 2015 | Student distilled from unlabeled data reaches ~teacher accuracy, far above its own labels |
 | 31 | **Vision Transformer (ViT)** | Dosovitskiy et al. 2020 | Pure-transformer image classifier; the data-efficiency caveat vs CNNs |
 | 32 | **Rethinking Generalization** | Zhang et al. 2016 | Networks fit random labels to 100% train accuracy — capacity ≠ generalization |
@@ -124,7 +124,7 @@ A repeatable reproduction workflow applied to six landmark results:
 |---|----------|-------|
 | 33 | MDPs & dynamic programming | value/policy iteration on a from-scratch gridworld; the Bellman equation |
 | 34 | Model-free RL | Monte Carlo, TD, SARSA vs Q-learning (cliff-walking safe-vs-optimal path) |
-| 35 | Deep Q-Networks (DQN) | neural Q + experience replay + target network; solves a from-scratch CartPole |
+| 35 | Deep Q-Networks (DQN) | neural Q + experience replay + target network on a from-scratch CartPole; reaches the 500-step cap but doesn't hold it — the deadly triad, measured |
 | 36 | Policy gradients & actor-critic | REINFORCE, measured variance reduction, advantage/actor-critic |
 | 37 | PPO derived | trust region → clipped surrogate objective; connected directly to RLHF (NB21) |
 
@@ -147,11 +147,12 @@ The defining feature of this repo: **claims are checked, not asserted.** Represe
 - **All six optimizers** match `torch.optim` across their full trajectories to machine precision.
 - **FlashAttention** produces output *identical* to standard attention (≈4e-16) while never materializing the n×n score matrix.
 - **From-scratch GPT** trains on tiny-Shakespeare to **1.56 nats/char** (random baseline: 4.17) and generates coherent Shakespearean text.
-- **Reproductions** land: grokking's delayed generalization (val "groks" ~29× after memorization), double descent's interpolation-threshold peak, the lottery-ticket gap (winning ticket 0.92 vs random-reinit 0.72 at ~3% weights), distillation's transfer to a small student (0.97 vs 0.88), and 100%-train-accuracy memorization of random labels.
-- **RL** works from scratch: value/policy iteration agree on the gridworld optimum, DQN solves a from-scratch CartPole (500-step episodes), and PPO's clipped objective climbs to near-solved — all with self-built environments (no gym).
+- **Reproductions** land: grokking's delayed generalization (val "groks" ~29× after memorization, with a weight-decay ablation at 1.000 vs 0.001), double descent's test-error peak exactly at the interpolation threshold, distillation's transfer to a small student (0.972 vs 0.882, averaged over 3 seeds), and 100%-train-accuracy memorization of random labels.
+- **One reproduction only partially holds, and says so.** The lottery ticket keeps dense accuracy at 2.8% of weights (0.895 ± 0.043 vs 0.925 dense), but over 5 seeds the random-reinit control is beaten by only **+0.053** on average — and the effect shows up as *variance*, not separation: the control's seed-to-seed spread explodes to ±0.077 while the ticket's stays at ±0.005. An earlier single-seed run drew a collapsed control and reported a 0.195 gap; that number did not reproduce. NB29 now reports the weaker result and explains which knobs (full 60k train set, longer training, early-stopping selection) the original paper had that this budget doesn't.
+- **RL** works from scratch: value and policy iteration agree on the gridworld optimum, DQN learns a from-scratch CartPole (best episodes hit the 500-step cap; peak 50-episode average ~209, well short of the conventional 475 "solved" bar — the deadly-triad instability NB35 then dissects), and PPO's clipped objective climbs to a ~408 peak — all on self-built environments (no gym).
 - **The capstone** runs the full LLM lifecycle end-to-end: a small GPT goes from 0% instruction-following (pretrain only) to ~100% after SFT, then DPO-aligned and served — producing a working (tiny) assistant.
 
-Every code cell carries `assert`-based correctness checks; the notebooks are run top-to-bottom before shipping, so figures and outputs are real, not placeholders.
+Every notebook carries `assert`-based correctness checks — 109 of them — and is run top-to-bottom before shipping, so figures and outputs are real, not placeholders. Where a notebook's point is an experimental result rather than a reference comparison, the assert encodes the claim itself (grokking's delay is >10× its memorization step; the double-descent peak sits at the interpolation threshold; instruction tuning moves held-out tasks from ~0 to >0.9).
 
 ---
 
@@ -222,7 +223,7 @@ pip install -r requirements.txt
 jupyter lab      # or: jupyter notebook
 ```
 
-Then open `Tier 0 - Foundations/01_autograd_from_scratch.ipynb` and work upward — the tiers are ordered so each builds on the last. Datasets (MNIST, tiny-Shakespeare) download automatically to a local `data/` folder on first run (git-ignored).
+Then open `Tier 0 - Foundations/01_autograd_from_scratch.ipynb` and work upward — the tiers are ordered so each builds on the last. Datasets (MNIST, tiny-Shakespeare) download once to a single `data/` folder at the repo root on first run (git-ignored) and are reused from there. If a download fails the notebook stops with an explicit error rather than silently substituting placeholder text.
 
 ---
 
@@ -280,7 +281,7 @@ There is no separate unit-test suite — instead, **each notebook is its own exe
 - carries inline `assert`-based correctness checks (gradient checks against finite differences, output comparisons against `torch.optim` / `F.scaled_dot_product_attention` / `F.conv2d` / etc.), so a broken implementation fails loudly on execution;
 - is run end-to-end with `jupyter nbconvert --execute` before being committed, so all embedded figures and printed outputs reflect real runs.
 
-Reproducing the full repo is therefore: execute every notebook and confirm no cell errors and no failed asserts.
+Reproducing the full repo is therefore: execute every notebook and confirm no cell errors and no failed asserts. `jupyter nbconvert --to notebook --execute` exits non-zero on either, so this is a single scriptable check.
 
 ---
 

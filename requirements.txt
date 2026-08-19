@@ -6,5 +6,8 @@ torchvision>=0.19
 numpy>=1.26
 matplotlib>=3.8
 tiktoken>=0.7
+scikit-learn>=1.5    # 06_mlp_end_to_end_mnist: fallback dataset when the MNIST download fails
+graphviz>=0.20       # micrograd_NN_from_scratch: computation-graph rendering.
+                     # Also needs the system Graphviz binaries: https://graphviz.org/download/
 jupyter>=1.0
 nbconvert>=7.0
