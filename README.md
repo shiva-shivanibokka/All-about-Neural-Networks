@@ -2,6 +2,7 @@
 
 > A 47-notebook curriculum that rebuilds modern deep learning from first principles — applied math → autograd → GPT → diffusion → reinforcement learning → six reproduced landmark papers → a working mini-ChatGPT — every piece coded from scratch and verified against PyTorch.
 
+[![CI](https://github.com/shiva-shivanibokka/All-about-Neural-Networks/actions/workflows/ci.yml/badge.svg)](https://github.com/shiva-shivanibokka/All-about-Neural-Networks/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.6-ee4c2c)
 ![NumPy](https://img.shields.io/badge/NumPy-1.26-013243)
@@ -265,6 +266,8 @@ All-about-Neural-Networks/
 ├── Tier 7 - Reinforcement Learning/      # MDPs, Q-learning, DQN, policy gradients, PPO (5)
 ├── Tier 8 - Modern Architectures and Capstone/  # MoE, quantization, CLIP, RAG/agents, mini-ChatGPT (5)
 ├── micrograd_NN_from_scratch.ipynb       # early standalone micrograd exploration
+├── tools/check_claims.py                 # verifies README + notebook prose against committed outputs
+├── .github/workflows/ci.yml              # executes the 28 dataset-free notebooks + the claims check
 ├── requirements.txt
 ├── LICENSE
 └── README.md
@@ -282,6 +285,16 @@ There is no separate unit-test suite — instead, **each notebook is its own exe
 - is run end-to-end with `jupyter nbconvert --execute` before being committed, so all embedded figures and printed outputs reflect real runs.
 
 Reproducing the full repo is therefore: execute every notebook and confirm no cell errors and no failed asserts. `jupyter nbconvert --to notebook --execute` exits non-zero on either, so this is a single scriptable check.
+
+### What CI actually runs
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) executes on every push:
+
+- **28 of the 48 notebooks** — every one that needs neither a network fetch nor a dataset download. That covers the from-scratch engine end to end: autograd, the hand-derived layer backward passes, all six optimizers, attention, FlashAttention, the parallelism simulations, and the full RL stack. They run CPU-only in ~8 minutes of compute, split across a 6-way matrix.
+- The remaining 20 pull MNIST or tiny-Shakespeare and mostly want a GPU, so they stay a manual pre-commit pass. A CI job that re-downloads MNIST to test a runner's internet connection guards nothing, so it isn't there.
+- **[`tools/check_claims.py`](tools/check_claims.py)** — a second, one-second job that executes nothing. It reads the committed outputs and verifies that every number quoted in this README and in notebook prose is still backed by one.
+
+That last one exists because of a specific failure. Numbers here live in three places: inside `assert`s (self-enforcing), inside printed output (regenerated every run), and inside markdown prose — which **cannot** self-update. Retuning a random-policy baseline in NB35 shifted its RNG stream, the DQN result moved from 500/209 to 407/168, and three sentences quoting the old figures silently became wrong. The asserts didn't catch it because the asserts were still true. `check_claims.py` pins the load-bearing numbers to the outputs they came from, so that class of rot fails the build instead.
 
 ---
 
@@ -305,7 +318,7 @@ No production deployment, external users, or business metrics are claimed — th
 - Scale the from-scratch GPT with BPE tokens (Tier 2's tokenizer) and a longer context, and reproduce a slice of the GPT-2 loss curve end-to-end.
 - Additional reproductions and modern architectures (state-space models / Mamba, a DDIM sampler).
 - Convert the shared from-scratch engine into an importable `mininn` package so later notebooks import it rather than restating it.
-- Add CI to execute all notebooks on push as a regression guard.
+- Extend CI to the dataset-dependent notebooks by caching MNIST and tiny-Shakespeare between runs, so all 48 execute on push rather than 28.
 
 ---
 

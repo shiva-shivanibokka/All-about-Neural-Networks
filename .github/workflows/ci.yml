@@ -1,0 +1,124 @@
+name: CI
+
+# The notebooks ARE the test suite (see README "Testing"), so CI runs them.
+#
+# Only the 28 notebooks that need neither a network fetch nor a dataset download
+# run here. The other 20 pull MNIST or tiny-Shakespeare and mostly want a GPU;
+# those stay a manual `nbconvert --execute` pass before committing, which is what
+# the README documents. This split is deliberate: a CI job that downloads MNIST
+# five times to test a runner's internet connection guards nothing.
+#
+# What this does guard is the from-scratch engine -- autograd, the hand-derived
+# layer backward passes, all six optimizers, attention, FlashAttention, the RL
+# stack -- which is exactly where a silent numerical regression would be most
+# damaging and least visible.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  claims:
+    # Runs in about a second and needs no notebook execution: it reads the
+    # committed outputs and checks that every number quoted in the README and in
+    # notebook prose is still backed by one. Prose cannot self-update, so this is
+    # the only thing standing between a retuned run and a stale claim.
+    name: prose matches results
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python tools/check_claims.py
+
+  notebooks:
+    name: execute (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: prereqs
+            paths: |
+              Prerequisites - Math Foundations/M1_linear_algebra_for_dl.ipynb
+              Prerequisites - Math Foundations/M2_calculus_for_dl.ipynb
+              Prerequisites - Math Foundations/M3_probability_and_statistics.ipynb
+              Prerequisites - Math Foundations/M4_information_theory.ipynb
+              Prerequisites - Math Foundations/M5_optimization_and_numerics.ipynb
+          - group: tier0-foundations
+            paths: |
+              Tier 0 - Foundations/01_autograd_from_scratch.ipynb
+              Tier 0 - Foundations/02_tensors_and_tensor_autograd.ipynb
+              Tier 0 - Foundations/03_backprop_through_classic_layers.ipynb
+              Tier 0 - Foundations/04_optimizers_from_scratch.ipynb
+              Tier 0 - Foundations/05_weight_init_and_normalization.ipynb
+          - group: nets-and-transformers
+            paths: |
+              Tier 1 - Core Neural Nets/08_rnn_lstm_from_scratch.ipynb
+              Tier 2 - Transformers/10_attention_from_scratch.ipynb
+              Tier 2 - Transformers/14_kv_cache_and_inference.ipynb
+              Tier 3 - Scale and Efficiency/15_mixed_precision_and_numerics.ipynb
+              Tier 3 - Scale and Efficiency/16_flash_attention_from_scratch.ipynb
+              Tier 3 - Scale and Efficiency/17_parallelism.ipynb
+          - group: llm-pipeline
+            paths: |
+              Tier 4 - LLM Pipeline/19_pretraining_and_finetuning.ipynb
+              Tier 4 - LLM Pipeline/20_lora_peft_from_scratch.ipynb
+              Tier 4 - LLM Pipeline/21_rlhf_reward_ppo_dpo.ipynb
+              Tier 4 - LLM Pipeline/22_instruction_tuning_and_eval.ipynb
+          - group: generative-and-repro
+            paths: |
+              Tier 5 - Generative Models/26_normalizing_flows.ipynb
+              Tier 6 - Paper Reproductions/27_reproduction_workflow_grokking.ipynb
+          - group: reinforcement-learning
+            paths: |
+              Tier 7 - Reinforcement Learning/33_mdp_and_dynamic_programming.ipynb
+              Tier 7 - Reinforcement Learning/34_model_free_rl.ipynb
+              Tier 7 - Reinforcement Learning/35_dqn_from_scratch.ipynb
+              Tier 7 - Reinforcement Learning/36_policy_gradients_actor_critic.ipynb
+              Tier 7 - Reinforcement Learning/37_ppo_derived.ipynb
+              Tier 8 - Modern Architectures and Capstone/41_rag_and_agents.ipynb
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install (CPU torch only)
+        # The default torch wheel drags in ~2.5GB of nvidia-* CUDA packages that a
+        # CPU runner will never use. torchvision, tiktoken, graphviz and
+        # scikit-learn are only needed by notebooks this job does not run.
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy matplotlib nbconvert ipykernel
+
+      - name: Execute notebooks
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          fail=0
+          while IFS= read -r nb; do
+            [ -z "$nb" ] && continue
+            echo "::group::$nb"
+            if python -m nbconvert --to notebook --execute \
+                 --ExecutePreprocessor.timeout=1800 \
+                 --output-dir /tmp/ci-out "$nb"; then
+              echo "PASS $nb"
+            else
+              echo "::error file=$nb::failed to execute (cell error or failed assert)"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done <<< "${{ matrix.paths }}"
+          exit $fail
